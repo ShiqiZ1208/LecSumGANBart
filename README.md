@@ -42,7 +42,7 @@ see the [Example_notebook.ipynb](https://colab.research.google.com/drive/1clkj9t
     ```
 5. **Evaluation** using the model from Generator ckpt calculate the ROUGE score of the model using test datasets. If -base true it will evaluate the base model.
     ```bash
-    python main.py -o evaluate -g 'Generator_Path' -base False
+    python main.py -o evaluate -g 'Generator_Path'
     ```
 6. **Data augmentation** using the Lecture_aug.py to create augmentation datasets from Lecture datasets, num indicate how many data you want augmented.
     ```bash
