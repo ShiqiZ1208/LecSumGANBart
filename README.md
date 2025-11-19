@@ -8,7 +8,7 @@ This proposal addresses the challenge of generating concise, accurate, and domai
 - [License](#license)
 
 ## Colab
-see the [Example_notebook.ipynb](Example_notebook.ipynb) *random seed has changed after the colab notesbook is upload.
+see the [Example_notebook.ipynb]() *random seed has changed after the colab notesbook is upload.
 ## Installation
 1. **Clone the repository**:
     ```bash
