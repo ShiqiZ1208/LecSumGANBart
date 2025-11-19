@@ -118,7 +118,7 @@ if isinstance(options, str):
     elif options.lower() == "predict":
         model_predict(t_input, load_pathG)
     elif options.lower() == "evaluate":
-        Evaluated(load_pathG, is_baseline)
+        Evaluated(load_pathG)
 else:
     raise Exception("Type error: need type string")
 

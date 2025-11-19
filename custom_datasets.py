@@ -1,12 +1,13 @@
 import csv
 #from pickle import NONE
 import torch
-from transformers import BartTokenizer, BertTokenizer, AutoTokenizer, AutoModelForSeq2SeqLM, set_seed
+from transformers import BartTokenizer, BertTokenizer, RobertaTokenizer, AutoTokenizer, AutoModelForSeq2SeqLM, set_seed
 from torch.utils.data import Dataset
 from transformers.modeling_flax_outputs import FlaxSequenceClassifierOutput
 from transformers.models.idefics.image_processing_idefics import valid_images
+from datasets import load_dataset
 
-seed = 0
+seed = 42
 torch.manual_seed(seed)
 torch.cuda.manual_seed_all(seed)
 set_seed(seed)
@@ -19,6 +20,8 @@ model_ckpt = 'facebook/bart-large-cnn'
 tokenizer = BartTokenizer.from_pretrained(model_ckpt)
 Bert_ckpt = 'bert-base-uncased'
 Bert_tokenizer = BertTokenizer.from_pretrained(Bert_ckpt)
+RoBERTa_ckpt = "roberta-base"
+roBerta_tokenizer = RobertaTokenizer.from_pretrained(RoBERTa_ckpt)
 class GANBARTDataset(Dataset):
     def __init__(self, sentence1_list, sentence2_list, max_length=512):
         """
@@ -45,8 +48,8 @@ class GANBARTDataset(Dataset):
             sentence, text_target = labels,  # using Lecture and Summary
             truncation=True, padding='max_length', max_length=self.max_length, return_tensors='pt'
         )
-        bert_encoding = Bert_tokenizer(labels, # using Summary only
-            padding="max_length", truncation=True, max_length=512, return_tensors="pt"
+        bert_encoding = roBerta_tokenizer(labels, # using Summary only
+            padding="max_length", truncation=True, max_length=256, return_tensors="pt"
         )
         #bert_fencoding = Bert_tokenizer(sentence, 
             #padding="max_length", truncation=True, max_length=512, return_tensors="pt"
@@ -110,6 +113,54 @@ def create_dataset(is_argument = False ,lecture_path=None, summary_path=None, is
     del v_summary
     del test_Lecture
     del test_summary
+    return train_dataset, validation_dataset, test_dataset
+
+def samsum_dataset(is_argument = False ,lecture_path=None, summary_path=None, is_test = False):
+    # create datasets
+    if is_argument:
+        with open('/content/drive/MyDrive/COMP_8730_samsum/Datasets/samsum.csv',newline='', encoding='utf-8') as f:
+          reader = csv.reader(f)
+          rows = list(reader)
+          rows = rows[1:]
+        data_set = list(zip(*rows))
+        test_Lecture = list(data_set[1][2480:])
+        test_summary = list(data_set[2][2480:])
+        t_Lecture = list(data_set[1][:2400])
+        t_summary = list(data_set[2][:2400])
+        v_Lecture = list(data_set[1][2400:2480])
+        v_summary = list(data_set[2][2400:2480])
+    else:
+        with open('/content/drive/MyDrive/COMP_8730_samsum/Datasets/samsum.csv',newline='', encoding='utf-8') as f:
+          reader = csv.reader(f)
+          rows = list(reader)
+          rows = rows[1:]
+        data_set = list(zip(*rows))
+        print(len(data_set[1]))
+        test_Lecture = list(data_set[1][4400:4800]) # 12786
+        test_summary = list(data_set[2][4400:4800]) # 12786
+        t_Lecture = list(data_set[1][:4000]) # 11786
+        t_summary = list(data_set[2][:4000]) # 11786
+        v_Lecture = list(data_set[1][4000:4400])
+        v_summary = list(data_set[2][4000:4400])
+        # create and return datasets
+    test_dataset = GANBARTDataset(test_Lecture, test_summary)
+    train_dataset = GANBARTDataset(t_Lecture, t_summary)
+    validation_dataset = GANBARTDataset(v_Lecture, v_summary)
+    del data_set
+    del t_Lecture
+    del t_summary
+    del v_Lecture
+    del v_summary
+    del test_Lecture
+    del test_summary
+    return train_dataset, validation_dataset, test_dataset
+
+def get_samsum():
+    ds = load_dataset("knkarthick/samsum")
+    train_dataset = GANBARTDataset(ds["train"]["dialogue"], ds["train"]["summary"])
+    validation_dataset = GANBARTDataset(ds["validation"]["dialogue"], ds["validation"]["summary"])
+    test_dataset = GANBARTDataset(ds["test"]["dialogue"], ds["test"]["summary"])
+    del ds
     return train_dataset, validation_dataset, test_dataset
 
 

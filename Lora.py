@@ -1,5 +1,5 @@
 from datasets import load_dataset
-from transformers import AutoModelForSeq2SeqLM, AutoTokenizer, BartTokenizer, BartModel, BartConfig, AutoConfig, BertForSequenceClassification, set_seed
+from transformers import AutoModelForSeq2SeqLM, AutoTokenizer, BartTokenizer, BartModel, BartConfig, AutoConfig, BertForSequenceClassification, set_seed, RobertaTokenizer, RobertaForSequenceClassification
 import torch.nn as nn
 import torch
 from functools import partial
@@ -79,7 +79,7 @@ def Lora_fine_tuning_BART(model, lora_r, lora_alpha, lora_dropout, lora_query,
 def BART_base_model(ckpt):
     # load the base BART model
     model_ckpt = ckpt
-    base_model = AutoModelForSeq2SeqLM.from_pretrained(model_ckpt, config = AutoConfig.from_pretrained(model_ckpt, output_attention = True, output_hidden_state = True))
+    base_model = AutoModelForSeq2SeqLM.from_pretrained(model_ckpt)
 
     return base_model
 
@@ -129,6 +129,36 @@ def BERT_base_model():
     # load the BERT base model
     bert_base = BertForSequenceClassification.from_pretrained("bert-base-uncased", num_labels=2)
     return bert_base
+
+def RoBERTa_base_model():
+    config = AutoConfig.from_pretrained(
+        "roberta-base",
+        num_labels=2,
+        output_hidden_states=True,
+        output_attentions=True
+    )
+    roberta_base = RobertaForSequenceClassification.from_pretrained(
+        "roberta-base",
+        config=config
+    )
+    return roberta_base
+
+def bart_ids_to_roberta(bart_ids, roberta_tokenizer, max_seq_length=256):
+    device = bart_ids.device
+    ids = bart_ids.clone()
+
+    if ids.size(0) > max_seq_length:
+        ids = ids[:max_seq_length]
+
+    # Pad if shorter than max_seq_length
+    pad_length = max_seq_length - ids.size(0)
+    if pad_length > 0:
+        pad = torch.full((pad_length,), roberta_tokenizer.pad_token_id, device=device)
+        ids = torch.cat([ids, pad])
+
+    attention_mask = (ids != roberta_tokenizer.pad_token_id).long()
+
+    return ids, attention_mask
 
 def custom_bart_loss(outputs, labels, token_weights=None):
 

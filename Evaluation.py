@@ -1,12 +1,12 @@
 import torch
 from transformers import BartTokenizer, set_seed
-from custom_datasets import create_dataset
+from custom_datasets import create_dataset, get_samsum
 from Lora import BART_base_model
 from torch.utils.data import DataLoader
 import evaluate
 import numpy as np
 
-seed = 0
+seed = 42
 torch.manual_seed(seed)
 torch.cuda.manual_seed_all(seed)
 set_seed(seed)
@@ -23,7 +23,7 @@ def Evaluated(ckpt_path, baseline = False):
       model = BART_base_model(tokenizerckpt)
     BA_tokenizer = BartTokenizer.from_pretrained(tokenizerckpt)
     device = "cuda"
-    t_dataset, v_dataset, test_dataset = create_dataset() # load datasets
+    t_dataset, v_dataset, test_dataset = get_samsum() # load datasets
     test_dataloader = DataLoader(test_dataset, shuffle=False, batch_size=5, worker_init_fn=lambda worker_id: np.random.seed(seed))
     val_dataloader = DataLoader(v_dataset, shuffle=False, batch_size=5, worker_init_fn=lambda worker_id: np.random.seed(seed))
     rouge = evaluate.load("rouge")
