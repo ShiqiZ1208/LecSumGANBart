@@ -4,6 +4,19 @@ from Evaluation import Evaluated
 from bart_train import Btrain_model
 import os
 
+import random, numpy as np, torch
+
+seed = 42
+random.seed(seed)
+np.random.seed(seed)
+torch.manual_seed(seed)
+torch.cuda.manual_seed_all(seed)
+
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = False
+os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
+torch.use_deterministic_algorithms(True)
+
 
 
 parser = argparse.ArgumentParser()
@@ -112,7 +125,7 @@ if isinstance(options, str):
     if options.lower() == "train":
         if modes == "GAN":
           print("train_GAN")
-          train_model(num_epochs, batch_size, is_save, is_load, load_pathG, load_pathD, BART_only=False)
+          train_model(num_epochs, batch_size, is_save, is_load, load_pathG, load_pathD, seed, BART_only=False)
         if modes == "BART":
           Btrain_model(num_epochs, batch_size)
     elif options.lower() == "predict":

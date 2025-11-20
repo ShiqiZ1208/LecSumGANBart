@@ -20,12 +20,6 @@ import numpy as np
 from accelerate import Accelerator
 from torch.nn.utils import clip_grad_norm_
 
-seed = 42
-torch.manual_seed(seed)
-torch.cuda.manual_seed_all(seed)
-set_seed(seed)
-torch.backends.cudnn.deterministic = True
-torch.backends.cudnn.benchmark = False
 
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -50,7 +44,7 @@ lora_head = False
 
 
 
-def train_model(n_epochs, minibatch_sizes, is_save=False, is_load=False, pathG=None, pathD=None, BART_only = False):
+def train_model(n_epochs, minibatch_sizes, is_save=False, is_load=False, pathG=None, pathD=None, seed=42, BART_only = False):
 
 ########################################## load the tokenizer and model ##################################################
     # load model ckpt from huggingface and use it to tokenizer
@@ -89,11 +83,12 @@ def train_model(n_epochs, minibatch_sizes, is_save=False, is_load=False, pathG=N
 
     # set up learning schedualer for both discriminator and generator
     num_training_steps = num_epochs * len(train_dataloader)
+    num_warm_up = 100
     lr_schedulerG = get_scheduler(
-        name="linear", optimizer=optimizerG, num_warmup_steps=100, num_training_steps=num_training_steps
+        name="linear", optimizer=optimizerG, num_warmup_steps=num_warm_up, num_training_steps=num_training_steps
     )
     lr_schedulerD = get_scheduler(
-        name="linear", optimizer=optimizerD, num_warmup_steps=100, num_training_steps=num_training_steps
+        name="linear", optimizer=optimizerD, num_warmup_steps=num_warm_up, num_training_steps=num_training_steps
     )
 
     device, _, _ = get_backend() # make sure the device is in gpu
@@ -171,8 +166,10 @@ def train_model(n_epochs, minibatch_sizes, is_save=False, is_load=False, pathG=N
             genrated = NetG.generate(
             input_ids=input_ids,
             attention_mask=attention_mask,
-            labels=labels,
-            max_length=256
+            max_length=256,
+            do_sample=False, 
+            num_beams=4,
+            early_stopping=True
             )   
             genrated = genrated.detach()# shape [batch, seq_len]
             padded_input_ids = F.pad(genrated, (0, 256 - genrated.shape[1]), value=1)
@@ -215,7 +212,7 @@ def train_model(n_epochs, minibatch_sizes, is_save=False, is_load=False, pathG=N
             if BART_only == True:
               loss3 = output_g.loss
             else:
-              loss3 = output_g.loss + 0.8 * output_fd.loss #+ cos_loss
+              loss3 = output_g.loss + output_fd.loss #+ cos_loss
             loss3.backward()
 
             #update weight for generator(BART)
@@ -239,82 +236,87 @@ def train_model(n_epochs, minibatch_sizes, is_save=False, is_load=False, pathG=N
         #print(f"time for discrimnator {time_for_discriminator}\n")
         print(f"\n======================================Start Validation for Epoch: {epochs}==================================")
         NetG.eval()
+
+        pred_list = []
+        ref_list = []
+        loss_list = []
+
         for batch in eval_dataloader:
-          t_loss = []
-          t_rouge1 = []
-          t_rouge2 = []
-          t_rougeLs = []
-          t_rougeL = []
-          input_ids = batch['input_ids'].to(device)
-          attention_mask =batch['attention_mask'].to(device)
-          labels = batch['label'].to(device)
-          with torch.no_grad():
-              outputs = NetG(input_ids=input_ids, attention_mask=attention_mask, labels = labels)
-              genrated = NetG.generate(input_ids=input_ids, attention_mask=attention_mask, labels = labels, max_length = 256)
-              G_data = []
-              T_data = []
-              for i in range(min(minibatch_sizes,len(genrated))):
-                  G_data.append(BA_tokenizer.decode(genrated[i],skip_special_tokens=True))
-                  T_data.append(BA_tokenizer.decode(labels[i],skip_special_tokens=True))
-              r_score = rouge.compute(predictions=G_data, references=T_data)
-              t_rouge1.append(r_score['rouge1'])
-              t_rouge2.append(r_score['rouge2'])
-              t_rougeL.append(r_score['rougeL'])
-              t_rougeLs.append(r_score['rougeLsum'])
-              t_loss.append(outputs.loss)
-        a_rouge1 = sum(t_rouge1) / len(t_rouge1)
-        a_rouge2 = sum(t_rouge2) / len(t_rouge2)
-        a_rougeL = sum(t_rougeL) / len(t_rougeL)
-        a_rougeLs = sum(t_rougeLs) / len(t_rougeLs)
-        average_loss = sum(t_loss)/len(t_loss)
+            input_ids = batch['input_ids'].to(device)
+            attention_mask = batch['attention_mask'].to(device)
+            labels = batch['label'].to(device)
+
+            with torch.no_grad():
+                outputs = NetG(
+                    input_ids=input_ids,
+                    attention_mask=attention_mask,
+                    labels=labels
+                )
+                gen_tokens = NetG.generate(
+                    input_ids=input_ids,
+                    attention_mask=attention_mask,
+                    max_length=256,
+                    do_sample=False,
+                    num_beams=4,
+                    early_stopping=True
+                )
+
+            loss_list.append(outputs.loss.item())
+
+            # decode
+            for i in range(len(gen_tokens)):
+                pred_list.append(
+                    BA_tokenizer.decode(gen_tokens[i], skip_special_tokens=True)
+                )
+                ref_list.append(
+                    BA_tokenizer.decode(labels[i], skip_special_tokens=True)
+                )
+
+        # compute ROUGE once
+        r_score = rouge.compute(predictions=pred_list, references=ref_list)
+        average_loss = sum(loss_list) / len(loss_list)
+
         print("\nEpoch:{: <5}| validation_loss:{: <5.4f}".format(epochs, average_loss))
-        print("\nrouge1:{: <5.4f}| rouge2:{: <5.4f}| rougeL:{: <5.4f}| rougeLsum:{: <5.4f}".format(a_rouge1, a_rouge2, a_rougeL, a_rougeLs))
-        rouge_list = [a_rouge1, a_rouge2, a_rougeL, a_rougeLs]
+        print("\nrouge1:{: <5.4f}| rouge2:{: <5.4f}| rougeL:{: <5.4f}| rougeLsum:{: <5.4f}".format(r_score['rouge1'], r_score['rouge2'], r_score['rougeL'], r_score['rougeLsum']))
+        rouge_list = [r_score['rouge1'], r_score['rouge2'], r_score['rougeL'], r_score['rougeLsum']]
         Rouge_record.append(rouge_list)
         print(f"\n======================================End Validation for Epoch: {epochs}==================================")
-        if average_loss < best_val_loss:
-            best_val_loss = average_loss
-            epochs_without_improvement = 0
-            best_epoch = epochs
-        else:
-            epochs_without_improvement += 1
-
-        if a_rouge1 < best_rouge_1:
-            best_model_wts = NetG.state_dict()
-
-        if epochs_without_improvement >= patience:
-            print(f"Early stopping triggered at epoch {epoch+1}")
-            break
 
         epochs += 1
-        if BART_only ==False:
-          torch.save(NetG, f"./Testmodel/lora_bartGAN_{epoch}_{minibatch_sizes}.pth")
-        else:
-          torch.save(NetG, f"./BARTmodel/lora_bart_{epoch}_{minibatch_sizes}.pth")
 
     print("\n=============================================end training==================================")
-    if BART_only == True:
-      mode = "BART"
-    else:
-      mode = "GAN"
-    with open(f'./result/aug_datasets_8_5_{mode}.txt', 'w') as file:
-        file.write(f"best_epoch: {best_epoch}\n")
-        file.write("Rouge_record:\n")
-        for item in Rouge_record:
-            file.write(f"{item}\n")
-    
-        file.write("\nloss_record:\n")
-        for item in loss_record:
-            file.write(f"{item}\n")
-
+    G_path = f"./SaveModel/lora_bartGAN_G_epoch{epoch}_{minibatch_sizes}.pt"
+    D_path = f"./SaveModel/lora_bartGAN_D_epoch{epoch}_{minibatch_sizes}.pt"
     if is_save:
         if is_load:
-          torch.save(NetG, f"./SaveModel/continue_trained_lora_bart_{num_epochs}_{minibatch_sizes}")
-          torch.save(NetD, f"./SaveModel/continue_trained_lora_bert_{num_epochs}_{minibatch_sizes}")
+
+          torch.save({
+              "model_state": NetG.state_dict(),
+              "optimizer_state": optimizerG.state_dict(),
+              "lr_scheduler": lr_schedulerG.state_dict(),
+              "epoch": epoch
+          }, G_path)
+
+          torch.save({
+              "model_state": NetD.state_dict(),
+              "optimizer_state": optimizerD.state_dict(),
+              "lr_scheduler": lr_schedulerD.state_dict(),
+              "epoch": epoch
+          }, D_path)
         else:
-          NetG.load_state_dict(best_model_wts)
-          torch.save(NetG, f"./SaveModel/lora_bartGAN_{num_epochs}_{minibatch_sizes}") 
-          torch.save(NetD, f"./SaveModel/lora_bertGAN_{num_epochs}_{minibatch_sizes}")
+          torch.save({
+              "model_state": NetG.state_dict(),
+              "optimizer_state": optimizerG.state_dict(),
+              "lr_scheduler": lr_schedulerG.state_dict(),
+              "epoch": epoch
+          }, G_path)
+
+          torch.save({
+              "model_state": NetD.state_dict(),
+              "optimizer_state": optimizerD.state_dict(),
+              "lr_scheduler": lr_schedulerD.state_dict(),
+              "epoch": epoch
+          }, D_path)
 
 
 def model_predict(input_texts_file, pathG):
