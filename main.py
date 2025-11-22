@@ -1,7 +1,6 @@
 import argparse
 from Train import train_model, model_predict
 from Evaluation import Evaluated
-from bart_train import Btrain_model
 import os
 from tqdm.auto import tqdm
 import random, numpy as np, torch
@@ -127,7 +126,7 @@ if isinstance(options, str):
           print("train_GAN")
           train_model(num_epochs, batch_size, is_save, is_load, load_pathG, load_pathD, seed, BART_only=False)
         if modes == "BART":
-          Btrain_model(num_epochs, batch_size)
+          pass
     elif options.lower() == "predict":
         model_predict(t_input, load_pathG)
     elif options.lower() == "evaluate":
