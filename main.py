@@ -3,7 +3,7 @@ from Train import train_model, model_predict
 from Evaluation import Evaluated
 from bart_train import Btrain_model
 import os
-
+from tqdm.auto import tqdm
 import random, numpy as np, torch
 
 seed = 42
