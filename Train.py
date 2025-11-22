@@ -31,7 +31,7 @@ def train_model(n_epochs, minibatch_sizes, is_save, is_load, load_pathG, load_pa
     BaseD_model = Roberta_discriminator(num_labels=1)
     NetD = BaseD_model
 
-    t_dataset, v_dataset, test_dataset = samsum_dataset() #get_samsum() # load datasets
+    t_dataset, v_dataset, test_dataset = get_samsum() #get_samsum() # load datasets
     #print(len(t_dataset))
     train_dataloader = DataLoader(t_dataset, shuffle=False, batch_size=minibatch_sizes, worker_init_fn=lambda worker_id: np.random.seed(seed))
     #print(len(train_dataloader))
