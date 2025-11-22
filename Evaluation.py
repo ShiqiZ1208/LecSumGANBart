@@ -1,7 +1,7 @@
 import torch
 from transformers import BartTokenizer, set_seed
 from custom_datasets import create_dataset, get_samsum, samsum_dataset
-from Lora import BART_base_model
+from ganmodel import BART_base_model
 from torch.utils.data import DataLoader
 import evaluate
 import numpy as np
