@@ -93,8 +93,8 @@ def train_model(n_epochs, minibatch_sizes, is_save, is_load, load_pathG, load_pa
             decoder_input_id = batch['bert_input_id'].to(device)
             decoder_mask =batch['bert_mask'].to(device)
 
-            bert_sinput_id = batch['bert_input_sd'].to(device)
-            bert_smask = batch['bert_smask'].to(device)
+            #bert_sinput_id = batch['bert_input_sd'].to(device)
+            #bert_smask = batch['bert_smask'].to(device)
 
             #for p in NetG.parameters():
                 #p.requires_grad = False
